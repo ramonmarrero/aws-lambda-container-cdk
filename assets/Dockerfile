@@ -1,5 +1,5 @@
-FROM python:3.7-slim
+FROM public.ecr.aws/lambda/python:3.8
 
-ADD my_script.py /
+COPY app.py   ./
 
-CMD [ "python", "./my_script.py" ]
+CMD ["app.handler"]
