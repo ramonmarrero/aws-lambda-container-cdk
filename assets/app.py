@@ -5,8 +5,37 @@ import boto3
 import os
 from time import gmtime, strftime
 from sagemaker.spark.processing import PySparkProcessor
+from multiprocessing import Process
 
 
+def SparkProcessorRun(session, role, bucket, prefix, input_prefix_abalone, input_preprocessed_prefix_abalone):
+
+	# Run the processing job
+    spark_processor = PySparkProcessor(
+        base_job_name="sm-spark",
+        framework_version="2.4",
+        role=role,
+        sagemaker_session=session,
+        instance_count=2,
+        instance_type="ml.m5.xlarge",
+        max_runtime_in_seconds=1200,
+     )
+
+    spark_processor.run(
+        submit_app="./preprocess.py",
+        arguments=[
+                "--s3_input_bucket",
+                bucket,
+                "--s3_input_key_prefix",
+                input_prefix_abalone,
+                "--s3_output_bucket",
+                bucket,
+                "--s3_output_key_prefix",
+                input_preprocessed_prefix_abalone,
+        ],spark_event_logs_s3_uri="s3://{}/{}/spark_event_logs".format(bucket, prefix),logs=False,)
+		
+		
+	
 
 def handler(event, context):
 
@@ -30,33 +59,12 @@ def handler(event, context):
     prefix = "sagemaker/spark-preprocess-demo/{}".format(timestamp_prefix)
     input_prefix_abalone = "{}/input/raw/abalone".format(prefix)
     input_preprocessed_prefix_abalone = "{}/input/preprocessed/abalone".format(prefix)
-
+	
     sagemaker_session.upload_data(path="./abalone.csv", bucket=bucket, key_prefix=input_prefix_abalone)
-    
-    # Run the processing job
-    spark_processor = PySparkProcessor(
-    	base_job_name="sm-spark",
-        framework_version="2.4",
-    	role=role,
-	sagemaker_session=sagemaker_session,
-    	instance_count=2,
-    	instance_type="ml.m5.xlarge",
-    	max_runtime_in_seconds=1200,
-     )
 
-    spark_processor.run(
-    	submit_app="./preprocess.py",
-    	arguments=[
-        	"--s3_input_bucket",
-        	bucket,
-        	"--s3_input_key_prefix",
-        	input_prefix_abalone,
-        	"--s3_output_bucket",
-        	bucket,
-        	"--s3_output_key_prefix",
-        	input_preprocessed_prefix_abalone,
-    	],
-      spark_event_logs_s3_uri="s3://{}/{}/spark_event_logs".format(bucket, prefix),logs=False,)
+    sparkApp = Process(target=SparkProcessorRun, args=(sagemaker_session, role, bucket, prefix, input_prefix_abalone, input_preprocessed_prefix_abalone,  ))
+   
+    sparkApp.start()
+    
 
     return 'AWS Lambda Spark Process Ended - ' + sys.version + '!'
-
